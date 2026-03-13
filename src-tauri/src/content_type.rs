@@ -189,3 +189,79 @@ fn is_phone(s: &str) -> bool {
     digits.len() >= 7 && digits.len() <= 15 && s.chars().all(|c| c.is_ascii_digit() || "+-() ".contains(c))
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_url_https() {
+        let r = parse("https://example.com/path");
+        assert_eq!(r.content_type, "url");
+        assert_eq!(r.actions.len(), 2);
+        assert!(r.warnings.is_none());
+    }
+
+    #[test]
+    fn test_url_http_warns() {
+        let r = parse("http://example.com");
+        assert_eq!(r.content_type, "url");
+        assert!(r.warnings.is_some());
+    }
+
+    #[test]
+    fn test_www_becomes_url() {
+        let r = parse("www.example.com");
+        assert_eq!(r.content_type, "url");
+    }
+
+    #[test]
+    fn test_mailto() {
+        let r = parse("mailto:test@example.com");
+        assert_eq!(r.content_type, "email");
+    }
+
+    #[test]
+    fn test_bare_email() {
+        let r = parse("user@domain.com");
+        assert_eq!(r.content_type, "email");
+    }
+
+    #[test]
+    fn test_tel() {
+        let r = parse("tel:+15551234567");
+        assert_eq!(r.content_type, "phone");
+    }
+
+    #[test]
+    fn test_bare_phone() {
+        let r = parse("+1 (555) 123-4567");
+        assert_eq!(r.content_type, "phone");
+    }
+
+    #[test]
+    fn test_sms() {
+        let r = parse("sms:+15551234567?body=hello");
+        assert_eq!(r.content_type, "sms");
+    }
+
+    #[test]
+    fn test_geo() {
+        let r = parse("geo:40.7128,-74.0060");
+        assert_eq!(r.content_type, "geo");
+        let fields = r.fields.unwrap();
+        assert_eq!(fields["lat"], "40.7128");
+    }
+
+    #[test]
+    fn test_plain_text() {
+        let r = parse("just some text");
+        assert_eq!(r.content_type, "text");
+    }
+
+    #[test]
+    fn test_too_long() {
+        let long = "x".repeat(5000);
+        let r = parse(&long);
+        assert_eq!(r.content_type, "error");
+    }
+}
