@@ -11,16 +11,18 @@
   "app": {
     "withGlobalTauri": false,
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'none'",
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src ipc: http://ipc.localhost",
       "freezePrototype": true
     },
     "windows": [
       {
         "title": "QRSnap",
+        "label": "main",
         "width": 400,
-        "height": 300,
+        "height": 500,
         "resizable": false,
-        "visible": false
+        "visible": false,
+        "skipTaskbar": true
       }
     ]
   },
@@ -29,12 +31,7 @@
     "targets": ["dmg"],
     "icon": ["icons/icon.png"],
     "macOS": {
-      "minimumSystemVersion": "13.0",
-      "entitlements": null,
-      "frameworks": [],
-      "infoPlist": {
-        "LSUIElement": true
-      }
+      "minimumSystemVersion": "13.0"
     }
   }
 }
