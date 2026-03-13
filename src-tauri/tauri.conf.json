@@ -1,0 +1,33 @@
+{
+  "productName": "QRSnap",
+  "version": "0.1.0",
+  "identifier": "com.qrsnap.app",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'none'",
+      "freezePrototype": true
+    },
+    "windows": [
+      {
+        "title": "QRSnap",
+        "width": 400,
+        "height": 300,
+        "resizable": false,
+        "visible": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png"],
+    "macOS": { "minimumSystemVersion": "13.0" }
+  }
+}
