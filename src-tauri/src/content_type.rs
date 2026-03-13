@@ -164,8 +164,83 @@ fn parse_geo(raw: &str) -> ParsedQRContent {
 }
 
 fn parse_wifi(raw: &str) -> ParsedQRContent {
-    // Stub — full escape-aware parsing in PR 4.2
-    text_result(raw)
+    let body = raw.strip_prefix("WIFI:").unwrap_or("");
+    let fields = parse_wifi_fields(body);
+    let ssid = fields.get("S").cloned().unwrap_or_default();
+    let password = fields.get("P").cloned().unwrap_or_default();
+    let auth = fields.get("T").cloned().unwrap_or_else(|| "nopass".into());
+    let hidden = fields.get("H").cloned().unwrap_or_else(|| "false".into());
+
+    // Validate per RFC-004 §9.3
+    if ssid.len() > 32 || password.len() > 63 {
+        return text_result(raw);
+    }
+    let valid_auth = ["WPA", "WPA2", "WPA3", "WEP", "nopass"];
+    if !valid_auth.contains(&auth.as_str()) {
+        return text_result(raw);
+    }
+
+    let mut actions = vec![
+        ActionDefinition {
+            id: "copy_to_clipboard".into(),
+            label: "Copy SSID".into(),
+            payload: ssid.clone(),
+            requires_confirmation: false,
+            confirmation_message: None,
+        },
+    ];
+    if !password.is_empty() {
+        actions.push(ActionDefinition {
+            id: "copy_to_clipboard".into(),
+            label: "Copy Password".into(),
+            payload: password.clone(),
+            requires_confirmation: false,
+            confirmation_message: None,
+        });
+    }
+
+    let mut f = HashMap::new();
+    f.insert("ssid".into(), ssid.clone());
+    f.insert("auth".into(), auth);
+    f.insert("hidden".into(), hidden);
+    // Password NOT stored in fields — only available via action payload
+
+    ParsedQRContent {
+        content_type: "wifi".into(),
+        raw: raw.into(),
+        display_text: format!("{ssid} (WiFi)"),
+        actions,
+        fields: Some(f),
+        warnings: None,
+    }
+}
+
+/// Parse WiFi QR fields with escape handling: \; \, \\ \:
+fn parse_wifi_fields(body: &str) -> HashMap<String, String> {
+    let mut fields = HashMap::new();
+    let mut chars = body.chars().peekable();
+    while chars.peek().is_some() {
+        // Read key (single char before ':')
+        let key: String = (&mut chars).take_while(|&c| c != ':').collect();
+        if key.is_empty() { break; }
+        // Read value with escape handling, terminated by unescaped ';'
+        let mut val = String::new();
+        let mut prev_backslash = false;
+        for c in chars.by_ref() {
+            if prev_backslash {
+                val.push(c); // \; \, \\ \: → literal char
+                prev_backslash = false;
+            } else if c == '\\' {
+                prev_backslash = true;
+            } else if c == ';' {
+                break;
+            } else {
+                val.push(c);
+            }
+        }
+        fields.insert(key, val);
+    }
+    fields
 }
 
 fn parse_structured(raw: &str, ctype: &str, label: &str) -> ParsedQRContent {
@@ -263,5 +338,37 @@ mod tests {
         let long = "x".repeat(5000);
         let r = parse(&long);
         assert_eq!(r.content_type, "error");
+    }
+
+    #[test]
+    fn test_wifi_basic() {
+        let r = parse("WIFI:T:WPA;S:MyNetwork;P:secret123;;");
+        assert_eq!(r.content_type, "wifi");
+        let f = r.fields.unwrap();
+        assert_eq!(f["ssid"], "MyNetwork");
+        assert_eq!(f["auth"], "WPA");
+    }
+
+    #[test]
+    fn test_wifi_escaped_semicolon() {
+        let r = parse("WIFI:T:WPA;S:My\\;Net;P:pa\\;ss;;");
+        assert_eq!(r.content_type, "wifi");
+        let f = r.fields.unwrap();
+        assert_eq!(f["ssid"], "My;Net");
+        // Password in action payload, not fields
+        assert_eq!(r.actions[1].payload, "pa;ss");
+    }
+
+    #[test]
+    fn test_wifi_invalid_auth_falls_back() {
+        let r = parse("WIFI:T:INVALID;S:Net;P:pass;;");
+        assert_eq!(r.content_type, "text");
+    }
+
+    #[test]
+    fn test_wifi_ssid_too_long() {
+        let long_ssid = "A".repeat(33);
+        let r = parse(&format!("WIFI:T:WPA;S:{long_ssid};P:pass;;"));
+        assert_eq!(r.content_type, "text");
     }
 }
