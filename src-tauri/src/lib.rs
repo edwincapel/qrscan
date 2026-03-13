@@ -1,5 +1,6 @@
 mod capture;
 mod commands;
+mod content_type;
 mod shortcuts;
 mod tray;
 
