@@ -1,6 +1,7 @@
 mod capture;
 mod commands;
 mod content_type;
+mod ics_sanitizer;
 mod shortcuts;
 mod tray;
 
