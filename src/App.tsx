@@ -17,11 +17,11 @@ interface ParsedContent { content_type: string; raw: string; display_text: strin
 
 type ViewState =
   | { kind: "idle" }
+  | { kind: "scanning"; sourceType: string }
   | { kind: "result"; content: ParsedContent; sourceType: string }
   | { kind: "no_qr"; sourceType: string }
   | { kind: "error"; message: string; sourceType: string };
 
-/** Position window at top-right corner of primary monitor, below menu bar, then show it. */
 async function showPanel() {
   const win = getCurrentWindow();
   try {
@@ -29,10 +29,11 @@ async function showPanel() {
     if (monitor) {
       const scale = monitor.scaleFactor;
       const screenW = monitor.size.width / scale;
-      const winW = 420;
-      await win.setPosition(new LogicalPosition(screenW - winW - 20, 30));
+      await win.setPosition(new LogicalPosition(screenW - 440, 30));
     }
-  } catch { /* position fallback — show wherever */ }
+  } catch (e) {
+    console.error("Position error:", e);
+  }
   await win.setAlwaysOnTop(true);
   await win.show();
 }
@@ -51,11 +52,24 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  // Check permission — with timeout fallback so we never get stuck loading
   useEffect(() => {
-    invoke<boolean>("check_screen_permission").then(setPermOk);
+    const timer = setTimeout(() => {
+      console.warn("check_screen_permission timed out — assuming granted");
+      setPermOk(true);
+    }, 3000);
+    invoke<boolean>("check_screen_permission")
+      .then(ok => { clearTimeout(timer); setPermOk(ok); })
+      .catch(e => { clearTimeout(timer); console.error("Permission check failed:", e); setPermOk(true); });
+    return () => clearTimeout(timer);
   }, []);
 
-  // Show or hide the window based on active panel state
+  // Show/hide window based on active panel state
   useEffect(() => {
     const hasPanel =
       view.kind !== "idle" ||
@@ -64,14 +78,14 @@ function App() {
       confirmAction !== null ||
       permOk === false;
     if (hasPanel) {
-      showPanel();
+      showPanel().catch(e => console.error("showPanel failed:", e));
     } else {
-      hidePanel();
+      hidePanel().catch(e => console.error("hidePanel failed:", e));
     }
   }, [view, showHistory, showSettings, confirmAction, permOk]);
 
   const triggerScan = useCallback(async (mode: string) => {
-    setView({ kind: "idle" });
+    setView({ kind: "scanning", sourceType: mode });
     setConfirmAction(null);
     try {
       const scan = await invoke<ScanResult>("trigger_scan", { mode });
@@ -84,8 +98,9 @@ function App() {
       setView({ kind: "result", content: parsed, sourceType: mode });
     } catch (e) {
       const msg = String(e);
-      if (msg === "cancelled") return;
-      if (msg === "permission_denied") { setPermOk(false); return; }
+      if (msg === "cancelled") { setView({ kind: "idle" }); return; }
+      if (msg === "permission_denied") { setPermOk(false); setView({ kind: "idle" }); return; }
+      console.error("Scan error:", msg);
       setView({ kind: "error", message: msg, sourceType: mode });
     }
   }, []);
@@ -96,15 +111,36 @@ function App() {
     listen("scan-window", () => triggerScan("window")).then(u => unsubs.push(u));
     listen("show-history", () => setShowHistory(true)).then(u => unsubs.push(u));
     listen("show-settings", () => setShowSettings(true)).then(u => unsubs.push(u));
-    listen<string>("shortcut-conflict", e => setToast(e.payload)).then(u => unsubs.push(u));
+    listen<string>("shortcut-conflict", e => showToast(e.payload)).then(u => unsubs.push(u));
     return () => unsubs.forEach(u => u());
   }, [triggerScan]);
 
-  if (permOk === null) return null;
+  // Loading state — show spinner instead of blank white
+  if (permOk === null) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-white dark:bg-gray-900">
+        <div className="text-sm text-gray-400">Starting QRSnap…</div>
+      </div>
+    );
+  }
+
   if (!permOk) return <Onboarding onGranted={() => setPermOk(true)} />;
 
   return (
-    <>
+    <div className="bg-white dark:bg-gray-900 min-h-screen">
+      {/* Scanning indicator */}
+      {view.kind === "scanning" && (
+        <div className="fixed inset-0 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 text-center">
+            <div className="text-2xl mb-2">🔍</div>
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Select a region to scan…
+            </div>
+            <div className="text-xs text-gray-400 mt-1">Decoding QR code</div>
+          </div>
+        </div>
+      )}
+
       {view.kind === "result" && (
         <ResultPanel
           content={view.content}
@@ -134,7 +170,7 @@ function App() {
       )}
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
-    </>
+    </div>
   );
 }
 
