@@ -3,6 +3,7 @@ mod commands;
 mod content_type;
 mod history;
 mod ics_sanitizer;
+mod keychain;
 mod security;
 mod shortcuts;
 mod tray;
