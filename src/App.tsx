@@ -10,7 +10,7 @@ import SettingsPanel from "./components/SettingsPanel";
 import Toast from "./components/Toast";
 import { decodeQR } from "./lib/decoder";
 
-interface ScanResult { image_path: string; source_type: string }
+interface ScanResult { image_data: string; source_type: string }
 interface ActionDef { id: string; label: string; payload: string; requires_confirmation: boolean; confirmation_message?: string }
 interface ParsedContent { content_type: string; raw: string; display_text: string; actions: ActionDef[]; fields?: Record<string, string>; warnings?: string[] }
 
@@ -37,7 +37,7 @@ function App() {
     setConfirmAction(null);
     try {
       const scan = await invoke<ScanResult>("trigger_scan", { mode });
-      const decoded = await decodeQR(scan.image_path);
+      const decoded = await decodeQR(scan.image_data);
       if (!decoded) {
         setView({ kind: "no_qr", sourceType: mode });
         return;

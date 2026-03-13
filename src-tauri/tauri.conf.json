@@ -31,7 +31,10 @@
     "macOS": {
       "minimumSystemVersion": "13.0",
       "entitlements": null,
-      "frameworks": []
+      "frameworks": [],
+      "infoPlist": {
+        "LSUIElement": true
+      }
     }
   }
 }

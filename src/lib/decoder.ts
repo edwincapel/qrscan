@@ -17,10 +17,17 @@ function getWorker(): Worker {
   return worker;
 }
 
-/** Load a PNG file path as ImageData via OffscreenCanvas. */
-async function loadImage(path: string): Promise<ImageData> {
-  const response = await fetch(path);
-  const blob = await response.blob();
+/**
+ * Load a base64-encoded PNG into ImageData via OffscreenCanvas.
+ * Uses atob() — no fetch(), no filesystem access, no CSP issues.
+ */
+async function loadImageFromBase64(base64: string): Promise<ImageData> {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const blob = new Blob([bytes], { type: "image/png" });
   const bitmap = await createImageBitmap(blob);
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d");
@@ -30,14 +37,14 @@ async function loadImage(path: string): Promise<ImageData> {
 }
 
 /**
- * Decode a QR code from a PNG file at the given path.
+ * Decode a QR code from a base64-encoded PNG.
  * Runs the 5-pass pipeline in a persistent Web Worker.
  * Times out after 5 seconds and respawns the Worker.
  */
 export async function decodeQR(
-  imagePath: string,
+  imageData: string,
 ): Promise<DecodeResult | null> {
-  const imageData = await loadImage(imagePath);
+  const imgData = await loadImageFromBase64(imageData);
   const w = getWorker();
 
   return new Promise<DecodeResult | null>((resolve) => {
@@ -49,13 +56,9 @@ export async function decodeQR(
 
     w.onmessage = (e: MessageEvent<{ text: string | null }>) => {
       clearTimeout(timeout);
-      if (e.data.text) {
-        resolve({ text: e.data.text });
-      } else {
-        resolve(null);
-      }
+      resolve(e.data.text ? { text: e.data.text } : null);
     };
 
-    w.postMessage({ imageData });
+    w.postMessage({ imageData: imgData });
   });
 }

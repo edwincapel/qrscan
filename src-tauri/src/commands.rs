@@ -7,41 +7,55 @@ use crate::content_type::ParsedQRContent;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ScanResult {
-    pub image_path: String,
+    /// Base64-encoded PNG. Read in Rust before Drop deletes the temp file.
+    pub image_data: String,
     pub source_type: String,
 }
 
 /// Check if Screen Recording permission is granted.
+/// Uses the same byte-diversity heuristic as validate_capture() in capture.rs.
 #[tauri::command]
 pub fn check_screen_permission() -> Result<bool, String> {
     let tmp = tempfile::Builder::new()
         .prefix("qrsnap_perm_")
         .suffix(".png")
         .tempfile()
-        .map_err(|e| format!("Failed to create temp file: {e}"))?;
-
-    let path = tmp.path().to_path_buf();
+        .map_err(|e| format!("Temp file: {e}"))?;
 
     let status = Command::new("screencapture")
-        .arg("-x")
-        .arg("-t")
-        .arg("png")
-        .arg(&path)
+        .arg("-x").arg("-t").arg("png").arg(tmp.path())
         .status()
-        .map_err(|e| format!("Failed to run screencapture: {e}"))?;
+        .map_err(|e| format!("screencapture: {e}"))?;
 
     if !status.success() {
         return Ok(false);
     }
 
-    let metadata = std::fs::metadata(&path)
-        .map_err(|e| format!("Failed to read capture: {e}"))?;
+    let meta = std::fs::metadata(tmp.path())
+        .map_err(|e| format!("Read metadata: {e}"))?;
 
-    Ok(metadata.len() > 1024)
+    if meta.len() == 0 {
+        return Ok(false);
+    }
+
+    // Same byte-diversity check as validate_capture()
+    // A blank/denied PNG uses very few unique byte values (<60).
+    // A real screenshot uses many (>100).
+    if meta.len() < 5000 {
+        let data = std::fs::read(tmp.path())
+            .map_err(|e| format!("Read file: {e}"))?;
+        let mut seen = [false; 256];
+        for &b in &data { seen[b as usize] = true; }
+        let unique = seen.iter().filter(|&&v| v).count();
+        return Ok(unique >= 60);
+    }
+
+    Ok(true)
 }
 
 /// Trigger a scan. Mode is "region" or "window".
-/// Returns the path to the captured PNG on success.
+/// Reads image bytes into memory before session drops (deleting temp file).
+/// Returns base64-encoded PNG — no file path exposed to frontend.
 #[tauri::command]
 pub fn trigger_scan(mode: String) -> Result<ScanResult, String> {
     let session = CaptureSession::new().map_err(|e| e.to_string())?;
@@ -54,13 +68,11 @@ pub fn trigger_scan(mode: String) -> Result<ScanResult, String> {
 
     match result {
         Ok(()) => {
-            // Persist the temp file so the frontend/worker can read it.
-            // The NamedTempFile is consumed here — caller is responsible
-            // for cleanup after decoding.
-            let path = session.path().to_string_lossy().to_string();
-            std::mem::forget(session);
+            let bytes = std::fs::read(session.path())
+                .map_err(|e| format!("Read capture: {e}"))?;
+            // session drops here — temp file deleted immediately
             Ok(ScanResult {
-                image_path: path,
+                image_data: encode_base64(&bytes),
                 source_type: mode,
             })
         }
@@ -68,6 +80,23 @@ pub fn trigger_scan(mode: String) -> Result<ScanResult, String> {
         Err(CaptureError::PermissionDenied) => Err("permission_denied".to_string()),
         Err(CaptureError::Failed(msg)) => Err(msg),
     }
+}
+
+/// Minimal base64 encoder — avoids external dependency for small image payloads.
+fn encode_base64(data: &[u8]) -> String {
+    const CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as usize;
+        let b1 = chunk.get(1).copied().unwrap_or(0) as usize;
+        let b2 = chunk.get(2).copied().unwrap_or(0) as usize;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(CHARS[(n >> 18) & 63] as char);
+        out.push(CHARS[(n >> 12) & 63] as char);
+        out.push(if chunk.len() > 1 { CHARS[(n >> 6) & 63] as char } else { '=' });
+        out.push(if chunk.len() > 2 { CHARS[n & 63] as char } else { '=' });
+    }
+    out
 }
 
 /// Parse raw QR content into structured data.
@@ -139,4 +168,21 @@ fn settings_path() -> Result<std::path::PathBuf, String> {
     let dir = dirs::data_dir().ok_or("No data dir")?.join("com.qrsnap.app");
     std::fs::create_dir_all(&dir).map_err(|e| format!("Create dir: {e}"))?;
     Ok(dir.join("settings.json"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_base64_hello() {
+        assert_eq!(encode_base64(b"Hello"), "SGVsbG8=");
+    }
+
+    #[test]
+    fn test_base64_roundtrip_padding() {
+        assert_eq!(encode_base64(b"Man"), "TWFu");
+        assert_eq!(encode_base64(b"Ma"), "TWE=");
+        assert_eq!(encode_base64(b"M"), "TQ==");
+    }
 }

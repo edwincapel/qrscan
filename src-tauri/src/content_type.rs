@@ -244,11 +244,21 @@ fn parse_wifi_fields(body: &str) -> HashMap<String, String> {
 }
 
 fn parse_structured(raw: &str, ctype: &str, label: &str) -> ParsedQRContent {
+    let mut actions = vec![copy_action(raw)];
+    // Wire "Add to Calendar" action for event types (§9.4)
+    if ctype == "event" {
+        actions.push(confirm_action(
+            "open_calendar_event",
+            "Add to Calendar",
+            raw,
+            "Add this event to Calendar? Event details come from a QR code and may not be trustworthy.",
+        ));
+    }
     ParsedQRContent {
         content_type: ctype.into(),
         raw: raw.into(),
         display_text: label.into(),
-        actions: vec![copy_action(raw)],
+        actions,
         fields: None,
         warnings: None,
     }
