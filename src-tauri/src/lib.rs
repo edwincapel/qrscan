@@ -1,3 +1,4 @@
+mod commands;
 mod shortcuts;
 mod tray;
 
@@ -7,6 +8,9 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![
+            commands::check_screen_permission,
+        ])
         .setup(|app| {
             tray::setup_tray(app.handle())?;
             shortcuts::setup_shortcuts(app.handle())?;
