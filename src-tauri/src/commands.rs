@@ -3,6 +3,7 @@ use std::process::Command;
 use serde::Serialize;
 
 use crate::capture::{CaptureError, CaptureSession};
+use crate::content_type::ParsedQRContent;
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ScanResult {
@@ -67,4 +68,11 @@ pub fn trigger_scan(mode: String) -> Result<ScanResult, String> {
         Err(CaptureError::PermissionDenied) => Err("permission_denied".to_string()),
         Err(CaptureError::Failed(msg)) => Err(msg),
     }
+}
+
+/// Parse raw QR content into structured data.
+/// Rust is the canonical parser — frontend receives ParsedQRContent via IPC.
+#[tauri::command]
+pub fn parse_qr_content(raw: String) -> Result<ParsedQRContent, String> {
+    Ok(crate::content_type::parse(&raw))
 }

@@ -13,6 +13,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::check_screen_permission,
             commands::trigger_scan,
+            commands::parse_qr_content,
         ])
         .setup(|app| {
             tray::setup_tray(app.handle())?;
