@@ -6,6 +6,7 @@ use std::process::Command;
 
 const SERVICE: &str = "QRSnap";
 
+#[allow(dead_code)]
 pub fn store(ssid: &str, password: &str) -> Result<(), String> {
     if ssid.len() > 32 {
         return Err("SSID too long (max 32 bytes)".into());

@@ -1,9 +1,31 @@
 use std::process::Command;
 
 use serde::Serialize;
+use tauri::{AppHandle, Manager};
 
 use crate::capture::{CaptureError, CaptureSession};
 use crate::content_type::ParsedQRContent;
+
+/// Show the main panel window from Rust — more reliable than JS window APIs.
+#[tauri::command]
+pub fn show_panel_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show().map_err(|e| e.to_string())?;
+        let _ = window.set_always_on_top(true);
+        let _ = window.set_focus();
+    }
+    Ok(())
+}
+
+/// Hide the main panel window.
+#[tauri::command]
+pub fn hide_panel_window(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_always_on_top(false);
+        window.hide().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
 
 #[derive(Debug, Serialize, Clone)]
 pub struct ScanResult {

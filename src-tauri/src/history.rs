@@ -91,6 +91,7 @@ fn delete_thumbnail(file: &Option<String>) {
     }
 }
 
+#[allow(dead_code)]
 pub fn save_thumbnail(id: &str, data: &[u8]) -> Result<String, String> {
     let dir = thumbnails_dir()?;
     let filename = format!("{id}.png");

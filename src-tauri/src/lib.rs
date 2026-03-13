@@ -15,6 +15,8 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
+            commands::show_panel_window,
+            commands::hide_panel_window,
             commands::check_screen_permission,
             commands::trigger_scan,
             commands::parse_qr_content,
