@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState } from "react";
 import Onboarding from "./components/Onboarding";
 import ResultPanel from "./components/ResultPanel";
@@ -20,6 +21,21 @@ type ViewState =
   | { kind: "no_qr"; sourceType: string }
   | { kind: "error"; message: string; sourceType: string };
 
+const win = getCurrentWindow();
+
+/** Show window at top-right of screen (below macOS menu bar). */
+async function showPanel() {
+  await win.setAlwaysOnTop(true);
+  await win.show();
+  await win.setFocus();
+}
+
+/** Hide window and remove always-on-top when no panel is active. */
+async function hidePanel() {
+  await win.hide();
+  await win.setAlwaysOnTop(false);
+}
+
 function App() {
   const [permOk, setPermOk] = useState<boolean | null>(null);
   const [view, setView] = useState<ViewState>({ kind: "idle" });
@@ -31,6 +47,16 @@ function App() {
   useEffect(() => {
     invoke<boolean>("check_screen_permission").then(setPermOk);
   }, []);
+
+  // Show/hide window based on active panel state
+  useEffect(() => {
+    const hasPanel = view.kind !== "idle" || showHistory || showSettings || confirmAction !== null || permOk === false;
+    if (hasPanel) {
+      showPanel();
+    } else {
+      hidePanel();
+    }
+  }, [view, showHistory, showSettings, confirmAction, permOk]);
 
   const triggerScan = useCallback(async (mode: string) => {
     setView({ kind: "idle" });
@@ -74,13 +100,7 @@ function App() {
           onConfirmAction={setConfirmAction}
         />
       )}
-      {view.kind === "no_qr" && (
-        <NoQrFound
-          onRetry={() => triggerScan(view.sourceType)}
-          onDismiss={() => setView({ kind: "idle" })}
-        />
-      )}
-      {view.kind === "error" && (
+      {(view.kind === "no_qr" || view.kind === "error") && (
         <NoQrFound
           onRetry={() => triggerScan(view.sourceType)}
           onDismiss={() => setView({ kind: "idle" })}
@@ -94,7 +114,7 @@ function App() {
       )}
       {showHistory && (
         <HistoryPanel
-          onClose={() => setShowHistory(false)}
+          onClose={() => { setShowHistory(false); }}
           onAction={(id, payload) => {
             setConfirmAction({ id, label: id.replace("open_", "Open "), payload, requires_confirmation: true });
           }}

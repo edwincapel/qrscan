@@ -24,6 +24,7 @@ pub fn setup_tray(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id("qrsnap-tray")
         .menu(&menu)
         .icon(icon)
+        .icon_as_template(true) // Adapts to macOS dark/light menu bar
         .tooltip("QRSnap")
         .show_menu_on_left_click(true)
         .on_menu_event(handle_menu_event)
