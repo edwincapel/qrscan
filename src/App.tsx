@@ -5,6 +5,7 @@ import Onboarding from "./components/Onboarding";
 import ResultPanel from "./components/ResultPanel";
 import ConfirmDialog from "./components/ConfirmDialog";
 import NoQrFound from "./components/NoQrFound";
+import HistoryPanel from "./components/HistoryPanel";
 import Toast from "./components/Toast";
 import { decodeQR } from "./lib/decoder";
 
@@ -23,6 +24,7 @@ function App() {
   const [view, setView] = useState<ViewState>({ kind: "idle" });
   const [confirmAction, setConfirmAction] = useState<ActionDef | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     invoke<boolean>("check_screen_permission").then(setPermOk);
@@ -52,6 +54,7 @@ function App() {
     const unsubs: Array<() => void> = [];
     listen("scan-region", () => triggerScan("region")).then(u => unsubs.push(u));
     listen("scan-window", () => triggerScan("window")).then(u => unsubs.push(u));
+    listen("show-history", () => setShowHistory(true)).then(u => unsubs.push(u));
     listen<string>("shortcut-conflict", (e) => setToast(e.payload)).then(u => unsubs.push(u));
     return () => unsubs.forEach(u => u());
   }, [triggerScan]);
@@ -84,6 +87,14 @@ function App() {
         <ConfirmDialog
           action={confirmAction}
           onClose={() => setConfirmAction(null)}
+        />
+      )}
+      {showHistory && (
+        <HistoryPanel
+          onClose={() => setShowHistory(false)}
+          onAction={(id, payload) => {
+            setConfirmAction({ id, label: id.replace("open_", "Open "), payload, requires_confirmation: true });
+          }}
         />
       )}
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
