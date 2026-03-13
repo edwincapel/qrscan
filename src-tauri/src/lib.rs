@@ -2,6 +2,7 @@ mod capture;
 mod commands;
 mod content_type;
 mod ics_sanitizer;
+mod security;
 mod shortcuts;
 mod tray;
 
@@ -15,6 +16,12 @@ pub fn run() {
             commands::check_screen_permission,
             commands::trigger_scan,
             commands::parse_qr_content,
+            security::open_url,
+            security::open_mailto,
+            security::open_tel,
+            security::open_sms,
+            security::open_geo,
+            security::open_calendar_event,
         ])
         .setup(|app| {
             tray::setup_tray(app.handle())?;
