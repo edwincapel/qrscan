@@ -121,3 +121,22 @@ pub fn clear_history() -> Result<(), String> {
 pub fn keychain_get_password(ssid: String) -> Result<Option<String>, String> {
     crate::keychain::retrieve(&ssid)
 }
+
+#[tauri::command]
+pub fn get_settings() -> Result<String, String> {
+    let path = settings_path()?;
+    if !path.exists() { return Ok("{}".into()); }
+    std::fs::read_to_string(&path).map_err(|e| format!("Read settings: {e}"))
+}
+
+#[tauri::command]
+pub fn save_settings(json: String) -> Result<(), String> {
+    let path = settings_path()?;
+    std::fs::write(&path, json).map_err(|e| format!("Write settings: {e}"))
+}
+
+fn settings_path() -> Result<std::path::PathBuf, String> {
+    let dir = dirs::data_dir().ok_or("No data dir")?.join("com.qrsnap.app");
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Create dir: {e}"))?;
+    Ok(dir.join("settings.json"))
+}

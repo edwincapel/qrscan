@@ -6,6 +6,7 @@ import ResultPanel from "./components/ResultPanel";
 import ConfirmDialog from "./components/ConfirmDialog";
 import NoQrFound from "./components/NoQrFound";
 import HistoryPanel from "./components/HistoryPanel";
+import SettingsPanel from "./components/SettingsPanel";
 import Toast from "./components/Toast";
 import { decodeQR } from "./lib/decoder";
 
@@ -25,6 +26,7 @@ function App() {
   const [confirmAction, setConfirmAction] = useState<ActionDef | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     invoke<boolean>("check_screen_permission").then(setPermOk);
@@ -55,6 +57,7 @@ function App() {
     listen("scan-region", () => triggerScan("region")).then(u => unsubs.push(u));
     listen("scan-window", () => triggerScan("window")).then(u => unsubs.push(u));
     listen("show-history", () => setShowHistory(true)).then(u => unsubs.push(u));
+    listen("show-settings", () => setShowSettings(true)).then(u => unsubs.push(u));
     listen<string>("shortcut-conflict", (e) => setToast(e.payload)).then(u => unsubs.push(u));
     return () => unsubs.forEach(u => u());
   }, [triggerScan]);
@@ -97,6 +100,7 @@ function App() {
           }}
         />
       )}
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </>
   );

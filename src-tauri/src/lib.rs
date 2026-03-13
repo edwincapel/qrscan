@@ -23,6 +23,8 @@ pub fn run() {
             commands::delete_history,
             commands::clear_history,
             commands::keychain_get_password,
+            commands::get_settings,
+            commands::save_settings,
             security::open_url,
             security::open_mailto,
             security::open_tel,
