@@ -1,3 +1,4 @@
+mod capture;
 mod commands;
 mod shortcuts;
 mod tray;
