@@ -7,9 +7,17 @@ use crate::capture::{CaptureError, CaptureSession};
 use crate::content_type::ParsedQRContent;
 
 /// Show the main panel window from Rust — more reliable than JS window APIs.
+/// Positions at top-right corner of primary monitor, below menu bar.
 #[tauri::command]
 pub fn show_panel_window(app: AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
+        // Position at top-right, 30px from top (below menu bar), 20px from right edge
+        if let Ok(Some(monitor)) = window.primary_monitor() {
+            let scale = monitor.scale_factor();
+            let screen_w = monitor.size().width as f64 / scale;
+            let win_w = 420.0;
+            let _ = window.set_position(tauri::LogicalPosition::new(screen_w - win_w - 20.0, 30.0));
+        }
         window.show().map_err(|e| e.to_string())?;
         let _ = window.set_always_on_top(true);
         let _ = window.set_focus();
