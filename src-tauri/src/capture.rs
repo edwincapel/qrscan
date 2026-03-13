@@ -74,6 +74,38 @@ impl CaptureSession {
             return Err(CaptureError::Cancelled);
         }
 
+        self.validate_capture()
+    }
+
+    /// Detect blank captures caused by Screen Recording denial.
+    /// A real screenshot of a 1080p+ display compresses to >50KB as PNG.
+    /// A blank/uniform capture (permission denied) compresses to <5KB
+    /// because PNG's deflate compresses uniform data extremely well.
+    /// We also check byte entropy: a blank PNG has very low unique byte count.
+    fn validate_capture(&self) -> Result<(), CaptureError> {
+        let meta = std::fs::metadata(&self.path)
+            .map_err(|e| CaptureError::Failed(format!("Read metadata: {e}")))?;
+
+        // A real full-screen capture at Retina is typically >100KB.
+        // A small region capture is >5KB.
+        // A blank/denied capture of any size compresses to <5KB.
+        if meta.len() < 5000 {
+            // Read the file and check byte diversity as confirmation
+            let data = std::fs::read(&self.path)
+                .map_err(|e| CaptureError::Failed(format!("Read file: {e}")))?;
+            let mut seen = [false; 256];
+            for &b in &data {
+                seen[b as usize] = true;
+            }
+            let unique_bytes = seen.iter().filter(|&&v| v).count();
+
+            // A real PNG image uses many distinct byte values (>100).
+            // A blank PNG uses very few (<60).
+            if unique_bytes < 60 {
+                return Err(CaptureError::PermissionDenied);
+            }
+        }
+
         Ok(())
     }
 }
