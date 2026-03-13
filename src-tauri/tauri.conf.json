@@ -24,9 +24,7 @@
         "visible": false,
         "skipTaskbar": true,
         "decorations": false,
-        "shadow": true,
-        "x": 9999,
-        "y": 30
+        "shadow": true
       }
     ]
   },

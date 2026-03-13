@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, primaryMonitor, LogicalPosition } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useState } from "react";
 import Onboarding from "./components/Onboarding";
 import ResultPanel from "./components/ResultPanel";
@@ -21,19 +21,26 @@ type ViewState =
   | { kind: "no_qr"; sourceType: string }
   | { kind: "error"; message: string; sourceType: string };
 
-const win = getCurrentWindow();
-
-/** Show window at top-right of screen (below macOS menu bar). */
+/** Position window at top-right corner of primary monitor, below menu bar, then show it. */
 async function showPanel() {
+  const win = getCurrentWindow();
+  try {
+    const monitor = await primaryMonitor();
+    if (monitor) {
+      const scale = monitor.scaleFactor;
+      const screenW = monitor.size.width / scale;
+      const winW = 420;
+      await win.setPosition(new LogicalPosition(screenW - winW - 20, 30));
+    }
+  } catch { /* position fallback — show wherever */ }
   await win.setAlwaysOnTop(true);
   await win.show();
-  await win.setFocus();
 }
 
-/** Hide window and remove always-on-top when no panel is active. */
 async function hidePanel() {
-  await win.hide();
+  const win = getCurrentWindow();
   await win.setAlwaysOnTop(false);
+  await win.hide();
 }
 
 function App() {
@@ -48,9 +55,14 @@ function App() {
     invoke<boolean>("check_screen_permission").then(setPermOk);
   }, []);
 
-  // Show/hide window based on active panel state
+  // Show or hide the window based on active panel state
   useEffect(() => {
-    const hasPanel = view.kind !== "idle" || showHistory || showSettings || confirmAction !== null || permOk === false;
+    const hasPanel =
+      view.kind !== "idle" ||
+      showHistory ||
+      showSettings ||
+      confirmAction !== null ||
+      permOk === false;
     if (hasPanel) {
       showPanel();
     } else {
@@ -84,7 +96,7 @@ function App() {
     listen("scan-window", () => triggerScan("window")).then(u => unsubs.push(u));
     listen("show-history", () => setShowHistory(true)).then(u => unsubs.push(u));
     listen("show-settings", () => setShowSettings(true)).then(u => unsubs.push(u));
-    listen<string>("shortcut-conflict", (e) => setToast(e.payload)).then(u => unsubs.push(u));
+    listen<string>("shortcut-conflict", e => setToast(e.payload)).then(u => unsubs.push(u));
     return () => unsubs.forEach(u => u());
   }, [triggerScan]);
 
@@ -114,7 +126,7 @@ function App() {
       )}
       {showHistory && (
         <HistoryPanel
-          onClose={() => { setShowHistory(false); }}
+          onClose={() => setShowHistory(false)}
           onAction={(id, payload) => {
             setConfirmAction({ id, label: id.replace("open_", "Open "), payload, requires_confirmation: true });
           }}
